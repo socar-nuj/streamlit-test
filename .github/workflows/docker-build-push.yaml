@@ -1,0 +1,138 @@
+name: "Docker Build Push"
+on:
+  push:
+    tags:
+      - "v*.*.*"
+jobs:
+  docker_build_push:
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      registry: ${{ steps.select_registry.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Declare some variables
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=version::${GITHUB_REF#refs/tags/}"
+          cat << OBJECT
+          ${{ toJson(github) }}
+          OBJECT
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Select Registry
+        id: select_registry
+        run: |
+          if [ ${{ github.event.base_ref }} == "refs/heads/develop" ]; then
+            echo ::set-output name=registry::socar-data-dev
+          elif [ ${{ github.event.base_ref }} == "refs/heads/main" ]; then
+            echo ::set-output name=registry::socar-data
+          else
+            echo "invalid branch"
+            exit 1
+          fi
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: gcr.io/${{ steps.select_registry.outputs.registry }}/somlier
+          tags: |
+            type=pep440,pattern={{raw}}
+      - name: mkdocs meta
+        id: mkdocs-meta
+        uses: docker/metadata-action@v3
+        with:
+          images: gcr.io/socar-data/somlier-mkdocs
+          tags: |
+            type=pep440,pattern={{raw}}
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SOCAR_DE_PRIVATE_KEY }}
+          name: id_rsa
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+      - name: Login to GCR
+        uses: docker/login-action@v1
+        with:
+          registry: gcr.io
+          username: _json_key
+          password: ${{ secrets.GCR_JSON_KEY }}
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          ssh: |
+            socar-de=/home/runner/.ssh/id_rsa
+      - name: Notify to Channel
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: "dp_party_mlops"
+          SLACK_USERNAME: SoMLier Apparentice
+          SLACK_ICON_EMOJI: ":somlier_logo:"
+          SLACK_TITLE: Message
+          SLACK_MESSAGE: '[${{ steps.select_registry.outputs.registry }}] SoMLier ${{ steps.vars.outputs.version }}이 배포됐습니다'
+      - name: mkdocs Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          file: ./mkdocs/Dockerfile
+          tags: ${{ steps.mkdocs-meta.outputs.tags }}
+  update_config:
+    runs-on: ubuntu-latest
+    container: baloise/gitopscli
+    needs:
+      - docker_build_push
+    if:
+    steps:
+      - name: update config repo
+        run: |
+          [[ ${{ needs.docker_build_push.outputs.registry }} = "socar-data" ]] && values_file="values-mlops-prod.yaml" || values_file="values-mlops-dev.yaml"
+          gitopscli deploy --git-provider-url "https://github.com" \
+                           --username socar-de \
+                           --password $GITHUB_PASSWORD \
+                           --organisation socar-inc \
+                           --repository-name socar-data-helm-chart \
+                           --file somlier/$values_file \
+                           --values "{core.image.tag: ${{ needs.docker_build_push.outputs.version }}}" \
+                           --git-user "socar-de" \
+                           --git-email "socar-de@socar.kr" \
+                           --commit-message "bump(somlier/$values_file): core.image.tag를 ${{ needs.docker_build_push.outputs.version }}로 변경한다" \
+                           --create-pr \
+                           --auto-merge \
+                           --merge-method="squash"
+        env:
+          GITHUB_PASSWORD: ${{ secrets.SOCAR_DE_ACCESS_TOKEN }}
+  update-mkdocs:
+    runs-on: ubuntu-latest
+    container: baloise/gitopscli
+    needs:
+      - docker_build_push
+    steps:
+      - name: update mkdocs repo
+        run: |
+          gitopscli deploy --git-provider-url "https://github.com" \
+                           --username socar-de \
+                           --password $GITHUB_PASSWORD \
+                           --organisation socar-inc \
+                           --repository-name socar-data-helm-chart \
+                           --file dataplatform/values-prod.yaml \
+                           --values "{'repo[?name==''somlier''].image.tag': ${{ needs.docker_build_push.outputs.version }}}" \
+                           --git-user "socar-de" \
+                           --git-email "socar-de@socar.kr" \
+                           --commit-message "bump(somlier/values-prod.yaml): core.image.tag를 ${{ needs.docker_build_push.outputs.version }}로 변경한다" \
+                           --create-pr \
+                           --auto-merge \
+                           --merge-method="squash"
+        env:
+          GITHUB_PASSWORD: ${{ secrets.SOCAR_DE_ACCESS_TOKEN }}
