@@ -21,7 +21,6 @@ fastapi = {extras = ["all"], version = "^0.65.1"}
 BentoML = "^0.13.0"
 kubernetes = "^17.17.0"
 loguru = "^0.5.3"
-socar-data-dag-builder = {git = "git@github.com:socar-inc/socar-data-dag-builder.git", rev = "v0.4.3"}
 GitPython = { version = "^3.1.24" }
 dependency-injector = "^4.37.0"
 pandas = "^1.2.0"
