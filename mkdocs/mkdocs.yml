@@ -1,0 +1,30 @@
+site_name: Socar SoMLier
+site_description: SOCAR SoMLier docs
+
+repo_url: https://github.com/socar-inc/socar-data-platform-docs
+repo_name: socar-inc/socar-data-platform-docs
+
+theme:
+  logo: stylesheets/img.png
+  name: material
+  language: kr
+  palette:
+    primary: light blue
+  font:
+    text: avenir next
+  features:
+    - navigation.tabs
+    - content.code.annotate
+docs_dir: ./docs
+extra:
+  version:
+    provider: nuj
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html

@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{replaced with MLflow Project name}"
+  namespace: somlier
+  annotations:
+    sidecar.istio.io/inject: "false"
+spec:
+  ttlSecondsAfterFinished: 100
+  backoffLimit: 0
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+      - name: "{replaced with MLflow Project name}"
+        image: "{replaced with URI of Docker image created during Project execution}"
+        imagePullPolicy: Always
+        command: ["{replaced with MLflow Project entry point command}"]
+        envFrom:
+          - configMapRef:
+              name: somlier-core-env
+        volumeMounts:
+          - name: secret-volume
+            mountPath: "/mounted"
+            readOnly: true
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+      restartPolicy: Never
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: somlier-core-volume
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Equal"
+          value: "present"
+          effect: "NoSchedule"
+        - key: "node-pool-name"
+          operator: "Equal"
+          value: "node-pool-ml-gpu-1"
+          effect: "NoSchedule"
+        - key: "DeletionCandidateOfClusterAutoscaler"
+          operator: "Exists"
+          effect: "PreferNoSchedule"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: node-pool-ml-gpu-1

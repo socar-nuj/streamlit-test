@@ -1,0 +1,81 @@
+env: ${ENV:dev}
+
+project:
+  docker:
+    env: [ ]
+    name: car-state-classifier
+    tags:
+      - latest
+    volumes: [ ]
+  name: car-state-classifier
+  python:
+    requirements_txt: requirements.txt
+    version: 3.8.7
+
+model:
+  assets:
+    - provider: gcs # e.g., gcs, http, ...
+      files: # asset의 파일 목록 입니다.
+        weight: # asset 파일 이름입니다.
+          remote_uri: ${SOFAR_V4_PMG_WEIGHT:gs://socar-data-temp/cillian/sofar_v4_best_model/sofar_v4_pmg_pre_trained=imagenet_lb=0.05.pth} # ${ENV_NAME}를 통해 환경 변수를 주입할 수 있습니다.
+          local_path: sofar_v4_pmg_pre_trained=imagenet_lb=0.05.pth # or abs path
+  config:
+    class_name_list:
+      - 01_outer_normal
+      - 02_outer_damage
+      - 03_outer_dirt
+      - 04_outer_wash
+      - 05_inner_wash
+      - 06_inner_dashboard
+      - 07_inner_cupholder
+      - 08_inner_cupholder_dirt
+      - 09_inner_glovebox
+      - 10_inner_washer_fluid
+      - 11_inner_front_seat
+      - 12_inner_rear_seat
+      - 13_inner_trunk
+      - 14_inner_sheet_dirt
+    arch: pmg
+    model_path: MODEL_WEIGHT_PATH  # 분류 모델 weight
+    dataset: sofar_v4
+    num_workers: 4
+    batch_size: 128
+    pretext_task: imagenet # pretext_tas
+    model_weight_path: ${MODEL_WEIGHT_PATH:./assets/sofar_v4_pmg_pre_trained=imagenet_lb=0.05.pth}
+    credential_path: ${GOOGLE_APPLICATION_CREDENTIALS:./service_account.json}
+    project_id: ${PROJECT_ID:socar-data-dev}
+    topic: ${TOPIC:socar-ml-dev-car-state-classifier}
+    subscription_id: ${SUBSCRIPTION_ID:socar-ml-dev-car-state-classifier-sub}
+    max_messages: ${MAX_MESSAGES:100}
+    table_ref: ${TABLE_REF:socar-data-dev.socar_data_dev_ml.car_state_classifier_result}
+    slack_webhook_url: ${SLACK_WEBHOOK_URL:https://hooks.slack.com/services/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}
+    channel: ${SLACK_CHANNEL:#dp_monitor_product_dev}
+    start_date: ${START_DATE:2022-04-01 00:00:00}
+    end_date: ${END_DATE:2022-04-02 00:00:00}
+    statsd_host: ${STATSD_HOST:127.0.0.1}
+    statsd_port: ${STATSD_PORT:8125}
+    timeout: ${TIMEOUT:60}
+    model_version: ${MODEL_VERSION:v1.0.0}
+
+  name: car-state-classifier
+  tags:
+    - dev
+    - offline_serving
+  version: v0.0.6
+
+entrypoints:
+  main:
+    command: python
+    args: [ "main.py" ]
+  produce:
+    command: python
+    args: [ "produce.py" ]
+  consume:
+    command: python
+    args: [ "consume.py" ]
+  consume_async:
+    command: python
+    args: [ "consume_async.py" ]
+  test:
+    command: python
+    args: [ "-m", "test" ]

@@ -1,0 +1,44 @@
+from datetime import datetime
+
+from airflow import models
+from airflow.models import xcom_arg
+from socar_data_provider.operators.mlops import *
+
+from pendulum import timezone
+
+execution_date_utc = "{% raw %}{{ ds }}{% endraw %}"
+execution_date_kst = "{% raw %}{{ (macros.datetime.fromisoformat(ts) + macros.timedelta(hours=9)).strftime('%Y-%m-%d') }}{% endraw %}"
+
+
+{%- if dataset_load_by_kst %}
+sql = f"SELECT * FROM {{ dataset_ref }} WHERE {{ dataset_load_column }} = DATE_SUB('{execution_date_kst}', INTERVAL {{ dataset_load_window }} DAY)"
+{% else %}
+sql = f"SELECT * FROM {{ dataset_ref }} WHERE {{ dataset_load_column }} = DATE_SUb('{execution_date_utc}', INTERVAL {{ dataset_load_window }} DAY)"
+{%- endif %}
+
+with models.DAG(
+    dag_id="{{ dag_id }}",
+    tags={{ tags | default(["data-group"], true) }},
+    description="{{ description }}",
+    default_args={
+        "owner": "{{ owner | default("data-group", true) }}",
+        "depends_on_past": {{ depends_on_past | default(false, true) }},
+        "retries": 3,
+    },
+    start_date=datetime.strptime("{{ start_date }} 00:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone("Asia/Seoul")),
+    schedule_interval="{{ schedule_interval }}",
+    catchup={{ catchup | default(true, true) }},
+    max_active_runs=1,
+) as dag:
+
+    get_bq_datasets = MLOpsGetBigQueryDatasetOperator(
+        task_id="get_dataset_from_bigquery",
+        sql=sql,
+    )
+
+    MLOpsInferenceOperator.partial(
+        task_id="inference",
+        model_name="{{ model_name }}",
+        model_version="{{ model_version }}",
+        destination_table_ref="{{ destination_table_ref }}",
+    ).expand(inference_dataset_ref=xcom_arg.XComArg(get_bq_datasets))

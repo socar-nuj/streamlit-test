@@ -1,0 +1,2 @@
+class SomlierValidationError(Exception):
+    pass

@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{replaced with MLflow Project name}"
+  namespace: somlier
+  annotations:
+    sidecar.istio.io/inject: "false"
+spec:
+  ttlSecondsAfterFinished: 100
+  backoffLimit: 0
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+      - name: "{replaced with MLflow Project name}"
+        image: "{replaced with URI of Docker image created during Project execution}"
+        imagePullPolicy: Always
+        command: ["{replaced with MLflow Project entry point command}"]
+        envFrom:
+          - configMapRef:
+              name: somlier-core-env
+        volumeMounts:
+          - name: secret-volume
+            mountPath: "/mounted"
+            readOnly: true
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+      restartPolicy: Never
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: somlier-core-volume
