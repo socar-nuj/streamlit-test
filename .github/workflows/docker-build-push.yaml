@@ -16,7 +16,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Docker meta
-        id: mkdocs-meta
+        id: streamlit-meta
         uses: docker/metadata-action@v3
         with:
           images: lmj3502/streamlit
@@ -37,4 +37,4 @@ jobs:
           context: .
           push: true
           file: ./frontend/Dockerfile
-          tags: ${{ steps.mkdocs-meta.outputs.tags }}
+          tags: ${{ steps.streamlit-meta.outputs.tags }}
