@@ -6,6 +6,6 @@ RUN --mount=type=ssh,id=socar-de pip install pip --upgrade
 RUN pip install pip --upgrade
 RUN pip install "poetry==$poetry_version"
 RUN poetry config virtualenvs.in-project true
-RUN poetry install --no-dev
+RUN poetry install
 
 RUN streamlit run frontend/app.py
